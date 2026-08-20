@@ -1,11 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutomateClick</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>automateclick</title>
+  <link rel="stylesheet" href="popup.css" />
 </head>
+
 <body>
-    <h1>Hello Extensions</h1>
+  <main class="container">
+    <header class="header">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 38 38" aria-hidden="true">
+          <rect width="38" height="38" rx="8" fill="#18181b" />
+          <circle cx="14" cy="14" r="4" fill="#f7f7f8" />
+          <path d="M18 18 L28 30" stroke="#f7f7f8" stroke-width="3" stroke-linecap="round" />
+        </svg>
+        <div>
+          <h1>automateclick</h1>
+          <p>Simple browser automation</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="status-card">
+      <span id="status-dot" class="status-dot"></span>
+      <div>
+        <strong id="status">Ready</strong>
+        <span id="status-description">Record your clicks to get started.</span>
+      </div>
+    </section>
+
+    <section class="actions">
+      <button id="record-btn" class="primary-btn">
+        Record Clicks
+      </button>
+
+      <button id="start-btn" class="secondary-btn" disabled>
+        Start Automation
+      </button>
+
+      <button id="stop-btn" class="danger-btn" disabled>
+        Stop
+      </button>
+    </section>
+
+    <section class="recording-info">
+      <div class="info-header">
+        <h2>Recorded Actions</h2>
+        <span id="action-count">0</span>
+      </div>
+
+      <div id="actions-list" class="actions-list">
+        <p class="empty-state">
+          No actions recorded yet.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <span>automateclick</span>
+      <span>v0.1.0</span>
+    </footer>
+  </main>
+
+  <script src="../scripts/popup.js"></script>
 </body>
 </html>

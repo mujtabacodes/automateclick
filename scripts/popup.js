@@ -1,0 +1,178 @@
+const recordBtn = document.getElementById("record-btn");
+const startBtn = document.getElementById("start-btn");
+const stopBtn = document.getElementById("stop-btn");
+const statusEl = document.getElementById("status");
+const statusDescription = document.getElementById("status-description");
+const statusDot = document.getElementById("status-dot");
+const actionCount = document.getElementById("action-count");
+const actionsList = document.getElementById("actions-list");
+
+const TARGET_CLICKS = 2;
+
+init();
+
+async function init() {
+  recordBtn.addEventListener("click", onRecord);
+  startBtn.addEventListener("click", onStart);
+  stopBtn.addEventListener("click", onStop);
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    refreshUi();
+  });
+
+  await refreshUi();
+}
+
+async function onRecord() {
+  setBusy(true);
+
+  try {
+    const response = await sendToActiveTab({ type: "START_RECORDING" });
+
+    if (!response?.success) {
+      throw new Error(response?.error || "Could not start recording.");
+    }
+
+    await refreshUi();
+  } catch (error) {
+    await refreshUi();
+    setStatus("Error", error.message, "error");
+  }
+}
+
+async function onStart() {
+  setBusy(true);
+
+  try {
+    const response = await sendToActiveTab({ type: "START_AUTOMATION" });
+
+    if (!response?.success) {
+      throw new Error(response?.error || "Could not start automation.");
+    }
+
+    await refreshUi();
+  } catch (error) {
+    await refreshUi();
+    setStatus("Error", error.message, "error");
+  }
+}
+
+async function onStop() {
+  setBusy(true);
+
+  try {
+    await sendToActiveTab({ type: "STOP_AUTOMATION" });
+    await chrome.storage.local.set({
+      recordingState: "idle",
+      automationState: "idle"
+    });
+    await refreshUi();
+  } catch (error) {
+    await refreshUi();
+    setStatus("Error", error.message, "error");
+  }
+}
+
+async function refreshUi() {
+  const state = await chrome.storage.local.get({
+    recordedClicks: [],
+    recordingState: "idle",
+    automationState: "idle"
+  });
+
+  const clicks = state.recordedClicks || [];
+  const recording = state.recordingState === "recording";
+  const automating = state.automationState === "running";
+
+  renderActions(clicks);
+
+  if (automating) {
+    setStatus("Running", "Repeating the recorded clicks on this page.", "running");
+  } else if (recording) {
+    setStatus(
+      "Recording",
+      `Click ${TARGET_CLICKS} elements on the page. Reopen this popup when done.`,
+      "recording"
+    );
+  } else if (clicks.length >= TARGET_CLICKS) {
+    setStatus("Ready", "Start automation to replay the recorded clicks.", "ready");
+  } else {
+    setStatus("Ready", "Record your clicks to get started.", "idle");
+  }
+
+  recordBtn.disabled = recording || automating;
+  recordBtn.textContent = recording ? "Recording..." : "Record Clicks";
+  startBtn.disabled = recording || automating || clicks.length < TARGET_CLICKS;
+  stopBtn.disabled = !recording && !automating;
+}
+
+function renderActions(clicks) {
+  actionCount.textContent = String(clicks.length);
+
+  if (!clicks.length) {
+    actionsList.innerHTML = `<p class="empty-state">No actions recorded yet.</p>`;
+    return;
+  }
+
+  actionsList.innerHTML = clicks
+    .map((click, index) => {
+      const label = click.label || click.text || click.selector || `Click at ${click.x}, ${click.y}`;
+      return `
+        <div class="action-item">
+          <span class="action-index">${index + 1}</span>
+          <span class="action-label">${escapeHtml(label)}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function setStatus(title, description, mode) {
+  statusEl.textContent = title;
+  statusDescription.textContent = description;
+  statusDot.className = `status-dot ${mode}`;
+}
+
+function setBusy(isBusy) {
+  if (!isBusy) return;
+  recordBtn.disabled = true;
+  startBtn.disabled = true;
+  stopBtn.disabled = true;
+}
+
+async function sendToActiveTab(message) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+  if (!tab?.id) {
+    throw new Error("No active tab found.");
+  }
+
+  if (!isInjectableUrl(tab.url)) {
+    throw new Error("Open a normal webpage first. This page cannot be automated.");
+  }
+
+  try {
+    return await chrome.tabs.sendMessage(tab.id, message);
+  } catch (error) {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["scripts/content.js"]
+    });
+
+    return await chrome.tabs.sendMessage(tab.id, message);
+  }
+}
+
+function isInjectableUrl(url) {
+  if (!url) return false;
+  return /^(https?|file):/.test(url);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}

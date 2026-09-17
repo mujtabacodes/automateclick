@@ -3,14 +3,16 @@ if (window.__automateclickLoaded) {
 } else {
 window.__automateclickLoaded = true;
 
-const TARGET_CLICKS = 2;
-const MENU_DELAY_MS = 1000;
-const LOOP_DELAY_MS = 1500;
+const DEFAULT_TARGET_CLICKS = 2;
+const MIN_TARGET_CLICKS = 1;
+const MAX_TARGET_CLICKS = 10;
+const DEFAULT_DELAY_MS = 1000;
 
 let isRecording = false;
 let isAutomating = false;
 let recordedClicks = [];
 let recordingIndicator = null;
+let targetClicks = DEFAULT_TARGET_CLICKS;
 
 restoreState();
 
@@ -42,23 +44,39 @@ async function restoreState() {
   const state = await chrome.storage.local.get({
     recordedClicks: [],
     recordingState: "idle",
-    automationState: "idle"
+    automationState: "idle",
+    targetClicks: DEFAULT_TARGET_CLICKS
   });
 
   recordedClicks = state.recordedClicks || [];
+  targetClicks = clampTargetClicks(state.targetClicks);
 
   if (state.recordingState === "recording" || state.automationState === "running") {
     await chrome.storage.local.set({
-      recordingState: recordedClicks.length >= TARGET_CLICKS ? "complete" : "idle",
+      recordingState: recordedClicks.length >= targetClicks ? "complete" : "idle",
       automationState: "idle"
     });
   }
+}
+
+function clampTargetClicks(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_TARGET_CLICKS;
+  return Math.min(MAX_TARGET_CLICKS, Math.max(MIN_TARGET_CLICKS, Math.round(num)));
+}
+
+function getDelay(click) {
+  const delay = Number(click?.delayMs);
+  return Number.isFinite(delay) && delay >= 0 ? delay : DEFAULT_DELAY_MS;
 }
 
 async function startRecording() {
   if (isRecording) return;
 
   await stopAll();
+
+  const state = await chrome.storage.local.get({ targetClicks: DEFAULT_TARGET_CLICKS });
+  targetClicks = clampTargetClicks(state.targetClicks);
 
   isRecording = true;
   recordedClicks = [];
@@ -88,7 +106,7 @@ async function handleRecordingClick(event) {
 
   await chrome.storage.local.set({ recordedClicks });
 
-  if (recordedClicks.length >= TARGET_CLICKS) {
+  if (recordedClicks.length >= targetClicks) {
     await stopRecording();
   }
 }
@@ -100,39 +118,49 @@ async function stopRecording() {
 
   await chrome.storage.local.set({
     recordedClicks,
-    recordingState: recordedClicks.length >= TARGET_CLICKS ? "complete" : "idle"
+    recordingState: recordedClicks.length >= targetClicks ? "complete" : "idle"
   });
 }
 
 async function startAutomation() {
   if (isAutomating) return;
 
-  const result = await chrome.storage.local.get("recordedClicks");
+  const result = await chrome.storage.local.get({
+    recordedClicks: [],
+    targetClicks: DEFAULT_TARGET_CLICKS
+  });
   const clicks = result.recordedClicks;
+  const requiredClicks = clampTargetClicks(result.targetClicks);
 
-  if (!clicks || clicks.length < TARGET_CLICKS) {
-    throw new Error("Record two clicks before starting automation.");
+  if (!clicks || clicks.length < requiredClicks) {
+    throw new Error(
+      `Record ${requiredClicks} click${requiredClicks === 1 ? "" : "s"} before starting automation.`
+    );
   }
 
   isAutomating = true;
   await chrome.storage.local.set({ automationState: "running" });
 
-  runAutomation(clicks);
+  runAutomation();
 }
 
-async function runAutomation(clicks) {
+async function runAutomation() {
   try {
     while (isAutomating) {
-      const firstClicked = performClick(clicks[0]);
-      if (!firstClicked) {
-        break;
+      const result = await chrome.storage.local.get({ recordedClicks: [] });
+      const clicks = result.recordedClicks || [];
+
+      if (!clicks.length) break;
+
+      for (let i = 0; i < clicks.length && isAutomating; i++) {
+        const clicked = performClick(clicks[i]);
+        if (!clicked) {
+          isAutomating = false;
+          break;
+        }
+
+        await sleep(getDelay(clicks[i]));
       }
-
-      await sleep(MENU_DELAY_MS);
-      if (!isAutomating) break;
-
-      performClick(clicks[1]);
-      await sleep(LOOP_DELAY_MS);
     }
   } finally {
     isAutomating = false;
@@ -206,7 +234,8 @@ function describeClick(element, event) {
     tagName: element.tagName.toLowerCase(),
     ariaLabel,
     text,
-    label: ariaLabel || text || selector
+    label: ariaLabel || text || selector,
+    delayMs: DEFAULT_DELAY_MS
   };
 }
 
@@ -347,13 +376,13 @@ function createRecordingIndicator() {
     pointerEvents: "none"
   });
 
-  recordingIndicator.textContent = `Recording click 1 of ${TARGET_CLICKS}`;
+  recordingIndicator.textContent = `Recording click 1 of ${targetClicks}`;
   document.documentElement.appendChild(recordingIndicator);
 }
 
 function updateRecordingIndicator() {
   if (!recordingIndicator) return;
-  recordingIndicator.textContent = `Recording click ${Math.min(recordedClicks.length + 1, TARGET_CLICKS)} of ${TARGET_CLICKS}`;
+  recordingIndicator.textContent = `Recording click ${Math.min(recordedClicks.length + 1, targetClicks)} of ${targetClicks}`;
 }
 
 function removeRecordingIndicator() {

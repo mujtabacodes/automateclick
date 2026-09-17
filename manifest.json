@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "automateclick",
-  "version": "0.1.0",
-  "description": "Simple browser click automation.",
+  "name": "Automate Click",
+  "version": "1.0.0",
+  "description": "Automate repetitive clicks in your browser by creating custom click actions and running them with one click.",
   "permissions": [
     "storage",
     "activeTab",

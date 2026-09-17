@@ -45,7 +45,12 @@
     <section class="recording-info">
       <div class="info-header">
         <h2>Recorded Actions</h2>
-        <span id="action-count">0</span>
+        <div id="target-stepper" class="target-stepper">
+          <button id="target-decrease" class="stepper-btn" type="button" aria-label="Decrease number of actions to record">−</button>
+          <span id="action-count">0/2</span>
+          <button id="target-increase" class="stepper-btn" type="button" aria-label="Increase number of actions to record">+</button>
+        </div>
+        <button id="clear-btn" class="clear-btn" type="button" hidden>Clear</button>
       </div>
 
       <div id="actions-list" class="actions-list">

@@ -197,8 +197,23 @@
   
   footer {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     margin-top: 16px;
     font-size: 10px;
     color: #a1a1aa;
+
+  }
+
+  footer .heart {
+    font-size: 9px;
+  }
+
+  footer .version {
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  footer a {
+    cursor: pointer;
   }
